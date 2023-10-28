@@ -1,0 +1,39 @@
+import numpy as np
+import tensorflow as tf
+import cv2
+import time
+import os
+
+class DetectorAPI:
+    # Your DetectorAPI class definition here
+
+# Create an instance of the DetectorAPI
+detector = DetectorAPI()
+
+# Open a connection to the camera (usually camera index 0 is the built-in camera)
+cap = cv2.VideoCapture(0)
+
+while True:
+    ret, frame = cap.read()
+    
+    # Perform object detection on the frame
+    boxes, scores, classes, num = detector.processFrame(frame)
+    
+    # Draw bounding boxes on the frame
+    for i in range(len(boxes)):
+        if scores[i] > 0.5:  # Adjust the threshold as needed
+            box = boxes[i]
+            cv2.rectangle(frame, (box[1], box[0]), (box[3], box[2]), (0, 255, 0), 2)
+    
+    # Display the frame with bounding boxes
+    cv2.imshow('Object Detection', frame)
+    
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+# Release the camera and close OpenCV windows
+cap.release()
+cv2.destroyAllWindows()
+
+# Close the TensorFlow session when you're done
+detector.close()
