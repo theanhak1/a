@@ -1,0 +1,59 @@
+import cv2
+
+# Initialize the GOTURN tracker
+tracker = cv2.TrackerGOTURN_create()
+
+cap = cv2.VideoCapture(0)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+desired_fps = 25
+frame_delay = 1.0 / desired_fps
+
+people = []
+next_person_id = 1
+frame_count = 0
+frame_skip = 2
+line1_x = 200
+people_in_count = 0
+people_out_count = 0
+
+while True:
+    ret, frame = cap.read()
+    frame_count += 1
+    if frame_count % frame_skip != 0:
+        continue
+
+    if not ret:
+        break
+
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    if frame_count == 1:
+        # Initialize tracking for the first frame
+        bbox = cv2.selectROI("Person Detection and Tracking", frame, fromCenter=False)
+        ok = tracker.init(frame, bbox)
+
+    ok, bbox = tracker.update(frame)
+
+    if ok:
+        x, y, w, h = map(int, bbox)
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+        # Your logic to track people here
+        # You can store the tracking information in the 'people' list
+        
+        # Update counting lines and counts
+        # ...
+
+    line1_x = (frame.shape[0] * 7) // 8
+    cv2.line(frame, (0, line1_x), (frame.shape[1], line1_x), (0, 0, 255), 2)
+
+    cv2.putText(frame, f"People In: {people_in_count}", (7, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+    cv2.putText(frame, f"People Out: {people_out_count}",(7, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+    cv2.imshow("Person Detection and Tracking", frame)
+
+    if cv2.waitKey(1) == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
