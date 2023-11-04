@@ -7,7 +7,7 @@ cap = cv2.VideoCapture(0)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
 
-# Create a dictionary to store trackers, labels, and previous positions for each detected person
+# Create a dictionary to store trackers, labels, and previous center points for each detected person
 people = {}
 
 # Define the minimum distance a person needs to move to be considered a new person
@@ -24,25 +24,31 @@ while True:
 
     for (x, y, w, h) in bodies:
         person_detected = False
-        for person_id, (tracker, label, prev_x, prev_y) in people.items():
+        for person_id, (tracker, label, prev_center_x, prev_center_y) in people.items():
             success, bbox = tracker.update(frame)
             if success:
                 x, y, w, h = map(int, bbox)
+                # Calculate the center point of the bounding box
+                center_x = x + w // 2
+                center_y = y + h // 2
                 # Calculate the distance moved
-                distance_moved = ((x - prev_x) ** 2 + (y - prev_y) ** 2) ** 0.5
+                distance_moved = ((center_x - prev_center_x) ** 2 + (center_y - prev_center_y) ** 2) ** 0.5
                 if distance_moved >= min_movement_distance:
                     cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
                     cv2.putText(frame, label, (x, y - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                    people[person_id] = (tracker, label, x, y)
+                    people[person_id] = (tracker, label, center_x, center_y)
                     person_detected = True
 
         if not person_detected:
             label = f"Person {len(people) + 1}"
             tracker = cv2.TrackerKCF_create()
             tracker.init(frame, (x, y, w, h))
-            people[len(people)] = (tracker, label, x, y)
+            # Calculate the center point of the initial bounding box
+            center_x = x + w // 2
+            center_y = y + h // 2
+            people[len(people)] = (tracker, label, center_x, center_y)
 
-    cv2.imshow("Distance-Based Tracking", frame)
+    cv2.imshow("Distance-Based Tracking with Center Points", frame)
 
     if cv2.waitKey(1) == ord('q'):
         break
