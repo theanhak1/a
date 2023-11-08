@@ -1,0 +1,121 @@
+import cv2
+import numpy as np
+import threading
+
+# Load the body cascade classifier
+body_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_fullbody.xml')
+
+cap = cv2.VideoCapture(0)  # Open the video stream from the camera (use ID 0 or replace with a URL if needed)
+
+# Set the frame width and height
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
+# Set the desired frame rate
+desired_fps = 25
+frame_delay = 1.0 / desired_fps
+
+# Create a named window for displaying the video
+cv2.namedWindow('Pedestrian Counting', cv2.WINDOW_NORMAL)
+cv2.resizeWindow('Pedestrian Counting', 640, 480)
+
+enter_count = 0
+exit_count = 0
+
+line = [(0, 480 // 3), (640, 480 // 3)]
+tracker = cv2.TrackerCSRT_create()
+
+tracking_objects = {}
+next_object_id = 1
+
+# Draw the line
+def draw_line(image, line):
+    cv2.line(image, line[0], line[1], (255, 0, 0), 2)
+
+# Function to calculate the distance between two points
+def calculate_distance(point1, point2):
+    return ((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2) ** 0.5
+
+def detect_people():
+    global enter_count, exit_count, tracking_objects, next_object_id
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        frame = cv2.resize(frame, (640, 480))
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        draw_line(frame, line)
+
+        bodies = body_cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=5, minSize=(30, 30), flags=cv2.CASCADE_SCALE_IMAGE)
+        new_object_detected = False
+
+        for (x, y, w, h) in bodies:
+            centroid_x = x + w // 2
+            centroid_y = y + h // 2
+
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            cv2.circle(frame, (centroid_x, centroid_y), 4, (0, 0, 255), -1)
+
+            person_tracked = False
+            person_id = None
+            for obj_id, values in tracking_objects.items():
+                try:
+                    tracker, bbox, prev_centroid, status = values
+                    x1, y1, w1, h1 = bbox
+                    dist = calculate_distance((centroid_x, centroid_y), prev_centroid)
+                except:
+                    continue
+
+                if dist < 10:  # Adjust the distance threshold (10 pixels)
+                    person_tracked = True
+                    person_id = obj_id
+                    break
+
+            if not person_tracked:
+                bbox = (x, y, w, h)
+                tracker = cv2.TrackerCSRT_create()
+                tracking_objects[next_object_id] = (tracker, bbox, (centroid_x, centroid_y), 'out')
+                person_id = next_object_id
+                next_object_id += 1
+                new_object_detected = True
+                tracker.init(frame, bbox)
+
+            if centroid_y < line[0][1] and tracking_objects[person_id][2][1] >= line[0][1]:
+                enter_count += 1
+                tracking_objects[person_id] = (tracker, bbox, (centroid_x, centroid_y), 'in')
+                message = f"Person {person_id} entered. Total people entered: {enter_count}"
+                print(message)
+            elif centroid_y > line[1][1] and tracking_objects[person_id][2][1] <= line[1][1]:
+                exit_count += 1
+                tracking_objects[person_id] = (tracker, bbox, (centroid_x, centroid_y), 'out')
+                message = f"Person {person_id} exited. Total people exited: {exit_count}"
+                print(message)
+
+        for obj_id, (_, bbox, _, status) in tracking_objects.items():
+            x1, y1, w1, h1 = bbox
+            cv2.rectangle(frame, (x1, y1), (x1 + w1, y1 + h1), (0, 255, 0), 2)
+            cv2.putText(frame, f"ID: {str(obj_id)} - {status}", (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+            cv2.imshow('Pedestrian Counting', frame)
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+detect_thread = threading.Thread(target=detect_people)
+detect_thread.start()
+
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    frame = cv2.resize(frame, (640, 480))
+    cv2.imshow('Pedestrian Counting', frame)
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+detect_thread.join()
+cap.release()
+cv2.destroyAllWindows()
